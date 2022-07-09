@@ -61,3 +61,16 @@ change_display_mode:
 	mov ax, 0x0003
 	int 0x10
 	ret
+
+display_string:
+	mov al, [bx]
+	test al, al			; test if al is zero
+	jz return
+	push bx
+	call display_letter
+	pop bx
+	inc bx
+	jmp display_string
+
+return:
+	ret

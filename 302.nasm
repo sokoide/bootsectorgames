@@ -14,10 +14,13 @@ b09:
 	loop b09
 b10:
 	call show_board
+	call find_line
+
 	call get_movement
 	mov byte [bx], 'X'
 
 	call show_board
+	call find_line
 
 	call get_movement
 	mov byte [bx], 'O'
@@ -85,4 +88,69 @@ show_square:
 	call display_letter
 	ret
 
+find_line:
+	; first horizontal line
+	mov al, [board]
+	cmp al, [board+1]
+	jne b01
+	cmp al, [board+2]
+	je won
+b01:
+	; leftmost vertical row
+	cmp al, [board+3]
+	jne b04
+	cmp al, [board+6]
+	je won
+b04:
+	; first diagonal
+	cmp al, [board+4]
+	jne b05
+	cmp al, [board+8]
+	je won
+b05:
+	; second horizontal
+	mov al, [board+3]
+	cmp al, [board+4]
+	jne b02
+	cmp al, [board+5]
+	je won
+b02:
+	; third horizontal
+	mov al, [board+6]
+	cmp al, [board+7]
+	jne b03
+	cmp al, [board+8]
+	je won
+b03:
+	; second vertical
+	mov al, [board+1]
+	cmp al, [board+4]
+	jne b06
+	cmp al, [board+7]
+	je won
+b06:
+	; rightmost vertical
+	mov al, [board+2]
+	cmp al, [board+5]
+	jne b07
+	cmp al, [board+8]
+	je won
+b07:
+	; second diagonal
+	cmp al, [board+4]
+	jne b08
+	cmp al, [board+6]
+	je won
+b08:
+	ret
+won:
+	; at this point, AL contains the letter which made the line
+	call display_letter
+	mov bx, message
+	call display_string
+
+message:
+	db " won!", 0
+
 	%include "library2.nasm"
+
