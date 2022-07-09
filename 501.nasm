@@ -59,4 +59,3 @@ m1:
 
 end:
 	int 0x20
-	%include "library2.nasm"
