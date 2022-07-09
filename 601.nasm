@@ -19,6 +19,7 @@ frame:	equ 0x0fac
 
 ; game
 fb21:
+	; F - Bird
 	mov di, pipe
 	xor ax, ax
 	stosw					; pipe
@@ -80,19 +81,20 @@ fb12:
 	and al, 4			; wing movement each 4 frames
 	jz fb15
 
-	mov al, [di-160]	; get the character below
+	; hit test
+	mov al, [di-160]	; get BG character at (X, Y-1)
 	mov word [di-160], 0x0d1e		; draw upper wing
-	add al, [di]		; another character below?
-	shr al, 1			; normalize?
+	add al, [di]		; add another character at (X, Y)
+	shr al, 1			; average it. (Space 0x20 + space 0x20) / 2 == 0x20 is expected if it's not crashed
 	mov word [di], 0x0d14	; draw body
 	jmp short fb16
 fb15:
-	mov al, [di]
+	mov al, [di]			; get a BG charater at (X, Y)
 	mov word [di], 0x0d1f	; draw body
 fb16:
-	add al, [di+2]
+	add al, [di+2]			; add another BG character at (X+1, Y)
 	mov word [di+2], 0x0d10	; draw head
-	cmp al, 0x40			; collision test
+	cmp al, 0x40			; collision test. if it's 2 spaces (0x20 +0x20), not crashed
 	jz fb19
 
 ; stars and game over
@@ -117,95 +119,100 @@ fb20:
 	loop fb20
 	jmp fb21			;restart
 fb19:
+	; per frame
 	call wait_frame
 	mov al, [frame]
-	and al, 7
+	test al, 7
 	jnz fb17
-	inc word [grav]
+	inc word [grav]		; increase grav every 8 frames
 fb17:
-	mov al, $20
-	mov [di-160], al
-	mov [di+2], al
-	stosb
+	; clear bird
+	mov al, $20			; space (blank) char
+	mov [di-160], al	; clear bird char at (X, Y-1)
+	mov [di+2], al		; clear bird char at (X+1, Y)
+	stosb				; clear bird char at (X, Y)
 	call scroll_scenery
 	call scroll_scenery
-	cmp byte [0x00a0], 0xb0
+	; hit test with pipe for scoring
+	cmp byte [0x00a0], 0xb0	; check if 0xa0 160 (0, 1) is 0xb0 (pipe)
 	jz fb27
-	cmp byte [0x00a2], 0xb0
+	cmp byte [0x00a2], 0xb0 ; check if 0xa1 162 (1, 1) is 0xb0. this is because scroll_scenery is called twice per cycle
 fb27:
+	; increment and show score
 	jnz fb24
-	inc word [score]
+	inc word [score]	; increment score
 	mov ax, [score]
-	mov di, 0x008e
+	mov di, 0x008e		; 8e==142 -> (71, 0)
 fb25:
-	xor dx, dx
+	xor dx, dx			; extend AX to 32bit DX:AX
 	mov bx, 10
-	div bx
-	add dx, 0x0c30
-	xchg ax, dx
-	std
-	stosw
-	mov byte [di], 0x20
-	cld
-	xchg ax, dx
+	div bx				; AX = (DX:AX) / BX, DX = remainder
+	add dx, 0x0c30		; color 0x0c, char->ASCII 1st digit score by adding 0x30
+	xchg ax, dx			; swap AX and DX. AX=score+color, DX=quotient
+	std					; set direction (di will be decremented)
+	stosw				; write AX (1st digit score)
+	mov byte [di], 0x20 ; clear a char on the left of the char
+	cld					; clear direction
+	xchg ax, dx			; swap AX and DX. AX=quotient
 	or ax, ax
-	jnz fb25
+	jnz fb25			; if quotient != 0, repeat
 fb24:
 	mov ah, 0x01
-	int  0x16
-	jz fb26
+	int  0x16			; key buffer check
+	jz fb26				; if nothing is in buffer
 	mov ah, 0x00
-	int 0x16
-	cmp al, 0x1b
+	int 0x16			; read key
+	cmp al, 0x1b		; ESC key?
 	jne fb4
 	int 0x020
 fb4:
+	; bird jump
 	mov ax, [bird]
-	sub ax, 0x10
-	cmp ax, 0x08
+	sub ax, 0x10		; 0x10=0b_10_000 -> since it's 5.3 fraction, it's integer 2
+	cmp ax, 0x08		; 0x08=0b_1_000 if Y < 1, don't change bird's Y
 	jb fb18
 	mov [bird], ax
 fb18:
 	mov byte [grav], 0
-	mov al, 0xb6
+	mov al, 0xb6		; flap sound
 	out (0x43), al
 	mov al,0x90
 	out (0x42), al
 	mov al, 0x4a
 	out (0x42), al
 	in al, (0x61)
-	or al, 0x03
+	or al, 0x03			; turn on sound
 	out (0x61), al
 fb26:
-	jmp fb12
+	jmp fb12			; jump to main loop
 scroll_scenery:
-	mov si, 0x00a2
-	mov di, 0x00a0
+	mov si, 0x00a2		; 162. row 1, column 1
+	mov di, 0x00a0		; 160. row 1, column 0
 fb2:
-	mov cx, 79
-	repz
+	mov cx, 79			; move 79 columns
+	repz				; repeat until CX != 0
 	movsw
-	mov ax, 0x0e20
+	mov ax, 0x0e20		; delete the right most column
 	stosw
-	lodsw
-	cmp si, 0x0fa2
+	lodsw				; advance SI
+	cmp si, 0x0fa2		; last cell?
 	jnz fb2
 	; insert houses
-	mov word [0x0f9e], 0x02df
+	mov word [0x0f9e], 0x02df			; green ground
 	in al, (0x40)	; get random number
 	and al, 0x70
 	jz fb5
-	mov bx, 0x0408
+	mov bx, 0x0408						; building 1st floor
 	mov [0x0efe], bx
 	mov di, 0x0e5e
 	and al, 0x20
 	jz fb3
-	mov [di], bx
+	mov [di], bx						; building 2nd floor
 	sub di, 0x00a0
 fb3:
 	mov word [di], 0x091e	; add roof
-	; check if it's time to insert a column
 fb5:
+	; check if it's time to insert a pipe
 	dec word [next]
 	mov bx, [next]
 	cmp bx, 0x03
@@ -260,19 +267,21 @@ fb11:
 	mov [next], ah
 fb6:
 	ret
-wait_frame:
+wait_frame:			; 18.2hz
 	mov ah, 0x00
-	int 0x1a
+	int 0x1a		; get system clock (18.2hz) in CX:DX
 fb14:
-	push dx
+	push dx			; save DX (clock)
 	mov ah, 0x00
-	int 0x1a
+	int 0x1a		; get system clock again
 	pop bx
-	cmp bx, dx
+	cmp bx, dx		; compare until it changes
 	jz fb14
-	inc word [frame]
+	inc word [frame]	; increase frame
 	in al, (0x61)
-	and al, 0xfc
+	and al, 0xfc		; turn off sound
 	out (0x61), al
 	ret
+end:
+	int 0x20
 
