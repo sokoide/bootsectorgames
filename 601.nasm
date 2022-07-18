@@ -158,7 +158,7 @@ fb25:
     jnz fb25                    ; if quotient != 0, repeat
 fb24:
     mov ah, 0x01
-    int  0x16                   ; key buffer check
+    int 0x16                    ; key buffer check
     jz fb26                     ; if nothing is in buffer
     mov ah, 0x00
     int 0x16                    ; read key

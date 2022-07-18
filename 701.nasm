@@ -39,6 +39,13 @@ START_COLOR:    equ ((sprites+SPRITE_SIZE-(shots+2))/SPRITE_SIZE+0x20)
         mov ah,0x04
         mov [level],ax  ; level = 0, lives = 4
 
+        ; key auto repeat
+        mov ah, 0x03
+        mov al, 0x05
+        mov bh, 0x00
+        mov bl, 0x08
+        int 0x16
+
 restart_game:
         xor ax,ax
         mov cx,level/2  ; /2 is because stosw is per 2 bytes (word)
@@ -233,24 +240,28 @@ in42:   mov [si-2],ax                   ; Save new frame / color
         call draw_sprite                ; Draw sprite (spaceship)
         jne in43                        ; Jump if still explosion
 
-        mov ah,0x02                     ; BIOS Get Keyboard Flags
-        int 0x16
+        mov ah, 0x01
+        int 0x16                        ; key buffer check
+        jz in35                         ; if nothing is in buffer
+        mov ah, 0x00
+
+        int 0x16                        ; read key
     %if com_file
-        test al,0x10                    ; Test for Scroll Lock and exit
-        jnz in10
+        cmp al,0x1b                     ; ESC key?
+        je in10
     %endif
 
-        test al,0x04                    ; Ctrl key?
-        jz in17                         ; No, jump
+        cmp ah,0x4b                     ; LEFT key?
+        jne in17                        ; No, jump
         dec di                          ; Move 2 pixels to left
         dec di
 
-in17:   test al,0x08                    ; Alt key?
-        jz in18                         ; No, jump
+in17:   cmp ah,0x4d                     ; RIGHT key?
+        jne in18                        ; No, jump
         inc di                          ; Move 2 pixels to right
         inc di
 in18:
-        test al,0x03                    ; Shift keys?
+        test al,0x20                    ; SPACE keys?
         jz in35                         ; No, jump
         cmp word [shots],0              ; Bullet available?
         jne in35                        ; No, jump
