@@ -50,9 +50,9 @@ main_loop:
     mov al, '>'
     call input_line
     call input_number       ; verify the line starts with a number
-    or ax, ax
-    je f14
-    call find_line
+    or ax, ax               ; no line number?
+    je f14                  ; if no line number is available, try to execute it as as command
+    call find_line          ; get a pointer to store the line
     xchg ax, di
     mov cx, max_length
     rep movsb               ; copy entered line into program
@@ -110,12 +110,13 @@ f29:
     push ax
     call find_line
     xchg ax, si
-    cmp byte [si], 0x0d
+    cmp byte [si], 0x0d     ; empty?
     je f30
     pop ax
     push ax
-    call output_number      ; show line number
+    call output_number      ; print line number
 f32:
+    ; print the line until it hits 0x0d
     lodsb
     call output
     cmp al, 0x0d
@@ -231,17 +232,18 @@ f8:
     add al, '0'
     jmp output
 input_number:
+    ; ret) AX as the current line number
     xor bx, bx
 f11:
     lodsb
     sub al, '0'
-    cmp al, 10
-    cbw
+    cmp al, 10              ; AL >= 10?
+    cbw                     ; convert to word (AX)
     xchg ax, bx
-    jnc f12
+    jnc f12                 ; if AL >=10, jmp f12
     mov cx, 10
-    mul cx
-    add bx, ax
+    mul cx                  ; AX = AX * 10
+    add bx, ax              ; BX = BX + AX
     jmp f11
 f12:
     dec si
@@ -273,7 +275,7 @@ f31:
 find_line:
     ; find line in program
     ; args) ax = line number
-    ; ret) ax = pointer to program
+    ; ret) ax = pointer to program = program + 20 * AX
     mov cx, max_length
     mul cx
     add ax, program
@@ -282,16 +284,16 @@ input_line:
     call output
     mov si, line
     push si
-    pop di
+    pop di                  ; write line in DI
 f1:
     call input_key
-    cmp al, 0x08
+    cmp al, 0x08            ; backspace??
     jne f2
     dec di
     jmp f1
 f2:
     stosb
-    cmp al, 0x0d
+    cmp al, 0x0d            ; CR?
     jne f1
     ret
 print_statement:
